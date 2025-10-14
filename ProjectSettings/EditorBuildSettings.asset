@@ -9,7 +9,7 @@ EditorBuildSettings:
     path: Assets/00_Scenes/MainMenu.unity
     guid: 9de70c85b2e016c46b39451005184600
   - enabled: 1
-    path: Assets/00_Scenes/Desk.unity
+    path: Assets/00_Scenes/Desk_01.unity
     guid: b4bdb4ad65e003444b4c115335d00106
   - enabled: 1
     path: Assets/00_Scenes/Router.unity
