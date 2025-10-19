@@ -13,7 +13,7 @@ public class PlayerController : MonoBehaviour
     [Header("Referencias")]
     public Transform model;
     public Animator animator;
-    public ParticleSystem stepParticles; // 🔹 NUEVO
+    public ParticleSystem stepParticles;
 
     private CharacterController controller;
     private Vector3 velocity;
@@ -47,10 +47,16 @@ public class PlayerController : MonoBehaviour
             jumpCount = 0;
         }
 
-        // Movimiento lateral
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-        Vector3 move = new Vector3(moveX, 0, moveZ);
+        // Movimiento adaptado a vista cenital (desde arriba)
+        float moveX = Input.GetAxis("Horizontal"); // A (-1) / D (+1)
+        float moveZ = Input.GetAxis("Vertical");   // W (+1) / S (-1)
+
+        // Reasignamos los ejes como pediste:
+        // W → -X
+        // S → +X
+        // A → -Z
+        // D → +Z
+        Vector3 move = new Vector3(-moveZ, 0, moveX);
 
         if (move.magnitude >= 0.1f)
         {
@@ -63,7 +69,7 @@ public class PlayerController : MonoBehaviour
         bool isRunning = move.magnitude > 0.1f && !isJumping;
         animator.SetBool("IsRunning", isRunning);
 
-        // 🔹 Controlar partículas de pasos
+        // Controlar partículas de pasos
         if (stepParticles != null)
         {
             if (isRunning && isGrounded)
@@ -89,11 +95,12 @@ public class PlayerController : MonoBehaviour
             animator.SetBool("IsJumping", true);
         }
 
-        // Gravedad
+        // Aplicar gravedad
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
     }
-    // 🔹 Esta función se llamará desde la animación
+
+    // Llamado desde la animación de paso
     public void Step()
     {
         if (stepParticles != null && controller.isGrounded)
@@ -101,5 +108,4 @@ public class PlayerController : MonoBehaviour
             stepParticles.Play();
         }
     }
-
 }
