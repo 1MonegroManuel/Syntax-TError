@@ -21,6 +21,8 @@ public class PlayerController : MonoBehaviour
     private bool isJumping;
     private int jumpCount;
 
+    private bool touchingFloor = false; // ✅ Nuevo flag para detectar "Floor"
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -44,19 +46,16 @@ public class PlayerController : MonoBehaviour
             velocity.y = -2f;
             isJumping = false;
             animator.SetBool("IsJumping", false);
-            jumpCount = 0;
+
+            // ✅ Solo reinicia el contador si está tocando un objeto con tag "Floor"
+            if (touchingFloor)
+                jumpCount = 0;
         }
 
-        // Movimiento adaptado a vista cenital (desde arriba)
-        float moveX = Input.GetAxis("Horizontal"); // A (-1) / D (+1)
-        float moveZ = Input.GetAxis("Vertical");   // W (+1) / S (-1)
-
-        // Reasignamos los ejes como pediste:
-        // W → -X
-        // S → +X
-        // A → -Z
-        // D → +Z
-        Vector3 move = new Vector3(-moveZ, 0, moveX);
+        // Movimiento lateral
+        float moveX = Input.GetAxis("Horizontal");
+        float moveZ = Input.GetAxis("Vertical");
+        Vector3 move = new Vector3(moveX, 0, moveZ);
 
         if (move.magnitude >= 0.1f)
         {
@@ -69,7 +68,7 @@ public class PlayerController : MonoBehaviour
         bool isRunning = move.magnitude > 0.1f && !isJumping;
         animator.SetBool("IsRunning", isRunning);
 
-        // Controlar partículas de pasos
+        // Partículas de pasos
         if (stepParticles != null)
         {
             if (isRunning && isGrounded)
@@ -95,12 +94,25 @@ public class PlayerController : MonoBehaviour
             animator.SetBool("IsJumping", true);
         }
 
-        // Aplicar gravedad
+        // Gravedad
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
     }
 
-    // Llamado desde la animación de paso
+    // 🔹 Detectar colisiones con el controlador
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.collider.CompareTag("Floor"))
+        {
+            touchingFloor = true;
+        }
+        else
+        {
+            touchingFloor = false;
+        }
+    }
+
+    // 🔹 Evento llamado desde la animación
     public void Step()
     {
         if (stepParticles != null && controller.isGrounded)

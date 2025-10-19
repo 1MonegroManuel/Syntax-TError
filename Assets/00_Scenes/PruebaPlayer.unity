@@ -209,7 +209,7 @@ Transform:
   m_GameObject: {fileID: 370086}
   serializedVersion: 2
   m_LocalRotation: {x: 0.08150642, y: -0, z: -0, w: 0.99667287}
-  m_LocalPosition: {x: 0, y: 2.4, z: -14.4}
+  m_LocalPosition: {x: 0, y: 2.4, z: -14.502}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -391,7 +391,7 @@ GameObject:
   - component: {fileID: 419142598}
   m_Layer: 0
   m_Name: Cube
-  m_TagString: Untagged
+  m_TagString: Floor
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -508,7 +508,7 @@ PrefabInstance:
     - target: {fileID: 2805069750132418519, guid: 9b12fb763175de44e9d664e8d3705b69,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.068
+      value: -0.17
       objectReference: {fileID: 0}
     - target: {fileID: 2805069750132418519, guid: 9b12fb763175de44e9d664e8d3705b69,
         type: 3}
@@ -544,6 +544,41 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3555440389239305563, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_Constraints
+      value: 112
+      objectReference: {fileID: 0}
+    - target: {fileID: 6356590576454023816, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_Height
+      value: 0.008678245
+      objectReference: {fileID: 0}
+    - target: {fileID: 6356590576454023816, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_Center.y
+      value: 0.0046936213
+      objectReference: {fileID: 0}
+    - target: {fileID: 7500969184095248249, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_AABB.m_Center.y
+      value: 0.001064256
+      objectReference: {fileID: 0}
+    - target: {fileID: 7500969184095248249, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_AABB.m_Center.z
+      value: 0.000465028
+      objectReference: {fileID: 0}
+    - target: {fileID: 7500969184095248249, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_AABB.m_Extent.y
+      value: 0.0039854143
+      objectReference: {fileID: 0}
+    - target: {fileID: 7500969184095248249, guid: 9b12fb763175de44e9d664e8d3705b69,
+        type: 3}
+      propertyPath: m_AABB.m_Extent.z
+      value: 0.0022620466
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
