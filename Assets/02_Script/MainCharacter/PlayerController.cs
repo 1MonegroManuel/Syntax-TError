@@ -21,7 +21,7 @@ public class PlayerController : MonoBehaviour
     private bool isJumping;
     private int jumpCount;
 
-    private bool touchingFloor = false; // ✅ Nuevo flag para detectar "Floor"
+    private bool touchingFloor = false; // ✅ Detecta si está tocando el tag "Floor"
 
     void Start()
     {
@@ -47,15 +47,20 @@ public class PlayerController : MonoBehaviour
             isJumping = false;
             animator.SetBool("IsJumping", false);
 
-            // ✅ Solo reinicia el contador si está tocando un objeto con tag "Floor"
+            // ✅ Solo reinicia el contador si toca algo con tag "Floor"
             if (touchingFloor)
                 jumpCount = 0;
         }
 
-        // Movimiento lateral
-        float moveX = Input.GetAxis("Horizontal");
-        float moveZ = Input.GetAxis("Vertical");
-        Vector3 move = new Vector3(moveX, 0, moveZ);
+        // ✅ Movimiento adaptado a vista cenital (cámara desde arriba)
+        float moveX = Input.GetAxis("Horizontal"); // A (-1) / D (+1)
+        float moveZ = Input.GetAxis("Vertical");   // W (+1) / S (-1)
+
+        // W → -X
+        // S → +X
+        // A → -Z
+        // D → +Z
+        Vector3 move = new Vector3(-moveZ, 0, moveX);
 
         if (move.magnitude >= 0.1f)
         {
@@ -64,7 +69,7 @@ public class PlayerController : MonoBehaviour
             controller.Move(move * moveSpeed * Time.deltaTime);
         }
 
-        // Animación correr
+        // Animación de correr
         bool isRunning = move.magnitude > 0.1f && !isJumping;
         animator.SetBool("IsRunning", isRunning);
 
@@ -94,12 +99,12 @@ public class PlayerController : MonoBehaviour
             animator.SetBool("IsJumping", true);
         }
 
-        // Gravedad
+        // Aplicar gravedad
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
     }
 
-    // 🔹 Detectar colisiones con el controlador
+    // Detectar colisiones del CharacterController
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
         if (hit.collider.CompareTag("Floor"))
@@ -112,7 +117,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    // 🔹 Evento llamado desde la animación
+    // Evento llamado desde la animación
     public void Step()
     {
         if (stepParticles != null && controller.isGrounded)
