@@ -10,6 +10,12 @@ public class PlayerController : MonoBehaviour
     public float jumpHeight = 2f;
     public int maxJumps = 2;
 
+    [Header("Ataques del jugador")]
+    public float attackCooldown = 0.7f; // Tiempo entre golpes
+    public int comboThreshold = 4;      // Número de golpes antes del combo
+    public float attackRange = 1.5f;    // Rango de golpe
+    public float attackDamage = 20f;    // Daño del golpe
+
     [Header("Referencias")]
     public Transform model;
     public Animator animator;
@@ -20,8 +26,14 @@ public class PlayerController : MonoBehaviour
     private bool isGrounded;
     private bool isJumping;
     private int jumpCount;
+    private bool touchingFloor = false;
 
-    private bool touchingFloor = false; // ✅ Detecta si está tocando el tag "Floor"
+    // Variables de ataque
+    private bool canAttack = true;
+    private bool lastAttackRight = false;
+    private int attackCount = 0;
+    private float lastAttackTime = 0f;
+    private bool isInCombo = false;
 
     void Start()
     {
@@ -39,7 +51,14 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        // Verificar si está en el suelo
+        Movimiento();
+        Saltar();
+        Ataque();
+    }
+
+    // ------------------- MOVIMIENTO -------------------
+    void Movimiento()
+    {
         isGrounded = controller.isGrounded;
         if (isGrounded && velocity.y < 0)
         {
@@ -47,33 +66,26 @@ public class PlayerController : MonoBehaviour
             isJumping = false;
             animator.SetBool("IsJumping", false);
 
-            // ✅ Solo reinicia el contador si toca algo con tag "Floor"
             if (touchingFloor)
                 jumpCount = 0;
         }
 
-        // ✅ Movimiento adaptado a vista cenital (cámara desde arriba)
-        float moveX = Input.GetAxis("Horizontal"); // A (-1) / D (+1)
-        float moveZ = Input.GetAxis("Vertical");   // W (+1) / S (-1)
+        float moveX = Input.GetAxis("Horizontal");
+        float moveZ = Input.GetAxis("Vertical");
 
-        // W → -X
-        // S → +X
-        // A → -Z
-        // D → +Z
         Vector3 move = new Vector3(-moveZ, 0, moveX);
 
-        if (move.magnitude >= 0.1f)
+        if (move.magnitude >= 0.1f && canAttack && !isInCombo)
         {
             Quaternion targetRotation = Quaternion.LookRotation(move);
             model.rotation = Quaternion.Slerp(model.rotation, targetRotation, Time.deltaTime * rotationSpeed);
             controller.Move(move * moveSpeed * Time.deltaTime);
         }
 
-        // Animación de correr
         bool isRunning = move.magnitude > 0.1f && !isJumping;
         animator.SetBool("IsRunning", isRunning);
 
-        // Partículas de pasos
+        // Control de partículas al caminar
         if (stepParticles != null)
         {
             if (isRunning && isGrounded)
@@ -81,14 +93,19 @@ public class PlayerController : MonoBehaviour
                 if (!stepParticles.isPlaying)
                     stepParticles.Play();
             }
-            else
+            else if (stepParticles.isPlaying)
             {
-                if (stepParticles.isPlaying)
-                    stepParticles.Stop();
+                stepParticles.Stop();
             }
         }
 
-        // Saltar / doble salto
+        velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
+    }
+
+    // ------------------- SALTO -------------------
+    void Saltar()
+    {
         if (Input.GetButtonDown("Jump") && jumpCount < maxJumps)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
@@ -98,31 +115,126 @@ public class PlayerController : MonoBehaviour
             animator.SetBool("IsRunning", false);
             animator.SetBool("IsJumping", true);
         }
-
-        // Aplicar gravedad
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
     }
 
-    // Detectar colisiones del CharacterController
+    // ------------------- ATAQUES -------------------
+    void Ataque()
+    {
+        if (isInCombo || !canAttack) return;
+
+        if (Input.GetKeyDown(KeyCode.P))
+        {
+            // 🔄 Girar hacia el enemigo más cercano
+            Transform enemigo = BuscarEnemigoCercano(8f);
+            if (enemigo != null)
+            {
+                Vector3 dir = (enemigo.position - transform.position);
+                dir.y = 0;
+                if (dir != Vector3.zero)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir);
+                    model.rotation = Quaternion.Slerp(model.rotation, targetRot, 1f);
+                }
+            }
+
+            // Detiene movimiento
+            animator.SetBool("IsRunning", false);
+            isJumping = false;
+            velocity = Vector3.zero;
+
+            canAttack = false;
+            lastAttackTime = Time.time;
+            attackCount++;
+
+            // Combo final
+            if (attackCount >= comboThreshold)
+            {
+                animator.SetTrigger("Combo");
+                attackCount = 0;
+                isInCombo = true;
+                Invoke(nameof(EndCombo), 1.3f);
+            }
+            else
+            {
+                if (lastAttackRight)
+                {
+                    animator.SetTrigger("AttackLeft");
+                    lastAttackRight = false;
+                }
+                else
+                {
+                    animator.SetTrigger("AttackRight");
+                    lastAttackRight = true;
+                }
+
+                Invoke(nameof(EnableAttack), attackCooldown);
+            }
+
+            Invoke(nameof(ResetCombo), 1.4f);
+        }
+    }
+
+    // ------------------- ATAQUE EFECTIVO -------------------
+    // 🔹 Este método lo llama el evento de animación
+    public void AttackHit()
+    {
+        Collider[] enemigos = Physics.OverlapSphere(transform.position + transform.forward * 1f, attackRange);
+
+        foreach (var col in enemigos)
+        {
+            if (col.CompareTag("Enemy"))
+            {
+                var enemigo = col.GetComponent<EnemyController>();
+                if (enemigo != null)
+                    enemigo.RecibirDaño(attackDamage);
+            }
+        }
+
+        Debug.Log("💥 Golpe ejecutado, enemigos dentro del rango: " + enemigos.Length);
+    }
+
+    void EnableAttack() => canAttack = true;
+    void EndCombo() { isInCombo = false; canAttack = true; }
+    void ResetCombo() { if (Time.time - lastAttackTime > 1.4f) attackCount = 0; }
+
+    // ------------------- COLISIONES -------------------
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        if (hit.collider.CompareTag("Floor"))
-        {
-            touchingFloor = true;
-        }
-        else
-        {
-            touchingFloor = false;
-        }
+        touchingFloor = hit.collider.CompareTag("Floor");
     }
 
-    // Evento llamado desde la animación
+    // ------------------- EFECTOS -------------------
     public void Step()
     {
         if (stepParticles != null && controller.isGrounded)
         {
             stepParticles.Play();
         }
+    }
+
+    // ------------------- DETECCIÓN DE ENEMIGOS -------------------
+    Transform BuscarEnemigoCercano(float radio = 10f)
+    {
+        GameObject[] enemigos = GameObject.FindGameObjectsWithTag("Enemy");
+        Transform masCercano = null;
+        float distanciaMin = Mathf.Infinity;
+
+        foreach (var e in enemigos)
+        {
+            float d = Vector3.Distance(transform.position, e.transform.position);
+            if (d < distanciaMin && d <= radio)
+            {
+                distanciaMin = d;
+                masCercano = e.transform;
+            }
+        }
+        return masCercano;
+    }
+
+    // ------------------- DEBUG -------------------
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position + transform.forward * 1f, attackRange);
     }
 }
