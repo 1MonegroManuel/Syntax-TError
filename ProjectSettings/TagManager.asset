@@ -6,6 +6,8 @@ TagManager:
   tags:
   - Floor
   - camera
+  - BallGame
+  - Grappler
   layers:
   - Default
   - TransparentFX
