@@ -8,4 +8,13 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/00_Scenes/MainMenu.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/00_Scenes/Desk.unity
+    guid: 47e5a76a791f143449b6bd29e5c1c010
+  - enabled: 1
+    path: Assets/00_Scenes/RatBox.unity
+    guid: f7408b8f5529a4c489db76550d4846d0
+  - enabled: 1
+    path: Assets/00_Scenes/Router.unity
+    guid: 5a52eae97bce9034d86d3a69a3a8ac64
   m_configObjects: {}

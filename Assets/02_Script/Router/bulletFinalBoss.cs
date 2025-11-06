@@ -61,7 +61,7 @@ public class bulletFinalBoss : MonoBehaviour
         {
             // Intentar quitar vida al jugador
             // Buscar componente de salud del jugador
-            var playerHealth = other.GetComponent<PlayerHealth>();
+            var playerHealth = other.GetComponent<Health>();
             if (playerHealth != null)
             {
                 playerHealth.TakeDamage(damage);
@@ -77,7 +77,7 @@ public class bulletFinalBoss : MonoBehaviour
                 else
                 {
                     // Buscar en el objeto padre
-                    var parentHealth = other.GetComponentInParent<PlayerHealth>();
+                    var parentHealth = other.GetComponentInParent<Health>();
                     if (parentHealth != null)
                     {
                         parentHealth.TakeDamage(damage);

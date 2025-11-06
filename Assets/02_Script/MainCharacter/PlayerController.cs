@@ -10,7 +10,7 @@ public class PlayerController : MonoBehaviour
     public float rotationSpeed = 10f;
     public float jumpHeight = 2f;
     public int maxJumps = 2;
-    
+
     [Header("Super Salto")]
     [Tooltip("Multiplicador de salto cuando está sobre Grappler")]
     public float grapplerJumpMultiplier = 3.0f;
@@ -38,8 +38,7 @@ public class PlayerController : MonoBehaviour
     private bool lastAttackRight = false;
     private int attackCount = 0;
     private float lastAttackTime = 0f;
-    private bool isInCombo = false;
-    private bool touchingFloor = false; // ✅ Detecta si está tocando el tag "Floor"
+    private bool isInCombo = false;// ✅ Detecta si está tocando el tag "Floor"
     private bool touchingGrappler = false; // ✅ Detecta si está tocando el tag "Grappler"
     private float originalJumpHeight; // ✅ Guarda el valor original del salto
 
@@ -152,15 +151,53 @@ public class PlayerController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.P))
         {
-            touchingFloor = true;
-            touchingGrappler = false;
-            Debug.Log("🏠 Tocando Floor");
-        }
-        else if (hit.collider.CompareTag("Grappler"))
-        {
-            touchingGrappler = true;
-            touchingFloor = false;
-            Debug.Log("🚀 Tocando Grappler - ¡Listo para super salto!");
+            // 🔄 Girar hacia el enemigo más cercano
+            Transform enemigo = BuscarEnemigoCercano(8f);
+            if (enemigo != null)
+            {
+                Vector3 dir = (enemigo.position - transform.position);
+                dir.y = 0;
+                if (dir != Vector3.zero)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir);
+                    model.rotation = Quaternion.Slerp(model.rotation, targetRot, 1f);
+                }
+            }
+
+            // Detiene movimiento
+            animator.SetBool("IsRunning", false);
+            isJumping = false;
+            velocity = Vector3.zero;
+
+            canAttack = false;
+            lastAttackTime = Time.time;
+            attackCount++;
+
+            // Combo final
+            if (attackCount >= comboThreshold)
+            {
+                animator.SetTrigger("Combo");
+                attackCount = 0;
+                isInCombo = true;
+                Invoke(nameof(EndCombo), 1.3f);
+            }
+            else
+            {
+                if (lastAttackRight)
+                {
+                    animator.SetTrigger("AttackLeft");
+                    lastAttackRight = false;
+                }
+                else
+                {
+                    animator.SetTrigger("AttackRight");
+                    lastAttackRight = true;
+                }
+
+                Invoke(nameof(EnableAttack), attackCooldown);
+            }
+
+            Invoke(nameof(ResetCombo), 1.4f);
         }
     }
 
@@ -172,8 +209,12 @@ public class PlayerController : MonoBehaviour
 
         foreach (var col in enemigos)
         {
-            touchingFloor = false;
-            touchingGrappler = false;
+            if (col.CompareTag("Enemy"))
+            {
+                var enemigo = col.GetComponent<EnemyController>();
+                if (enemigo != null)
+                    enemigo.RecibirDaño(attackDamage);
+            }
         }
 
         Debug.Log("💥 Golpe ejecutado, enemigos dentro del rango: " + enemigos.Length);
@@ -187,6 +228,17 @@ public class PlayerController : MonoBehaviour
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
         touchingFloor = hit.collider.CompareTag("Floor");
+        
+        // ✅ Detectar si está tocando Grappler para super salto
+        if (hit.collider.CompareTag("Grappler"))
+        {
+            touchingGrappler = true;
+            Debug.Log("🚀 Tocando Grappler - ¡Listo para super salto!");
+        }
+        else
+        {
+            touchingGrappler = false;
+        }
     }
 
     // ------------------- EFECTOS -------------------
@@ -229,5 +281,31 @@ public class PlayerController : MonoBehaviour
         // Obtener el nombre de la escena actual y recargarla
         string sceneName = SceneManager.GetActiveScene().name;
         SceneManager.LoadScene(sceneName);
+    }
+
+    // ------------------- DETECCIÓN DE ENEMIGOS -------------------
+    Transform BuscarEnemigoCercano(float radio = 10f)
+    {
+        GameObject[] enemigos = GameObject.FindGameObjectsWithTag("Enemy");
+        Transform masCercano = null;
+        float distanciaMin = Mathf.Infinity;
+
+        foreach (var e in enemigos)
+        {
+            float d = Vector3.Distance(transform.position, e.transform.position);
+            if (d < distanciaMin && d <= radio)
+            {
+                distanciaMin = d;
+                masCercano = e.transform;
+            }
+        }
+        return masCercano;
+    }
+
+    // ------------------- DEBUG -------------------
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position + transform.forward * 1f, attackRange);
     }
 }
