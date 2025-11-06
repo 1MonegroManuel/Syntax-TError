@@ -169,14 +169,7 @@ public class BallMovement : MonoBehaviour
 
     // ********** COLISIÓN CON EL JUGADOR (Muerte y Reinicio de la Escena) **********
 
-    private void OnCollisionEnter(Collision collision)
-    {
-        if (collision.gameObject.CompareTag("Player"))
-        {
-            // Llamar al método para manejar la muerte del jugador y el reinicio de la escena
-            StartCoroutine(HandlePlayerDeath());
-        }
-    }
+   
 
     // ********** MANEJO DE LA MUERTE DEL JUGADOR Y REINICIO DE LA ESCENA **********
 

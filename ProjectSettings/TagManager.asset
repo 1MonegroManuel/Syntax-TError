@@ -9,6 +9,7 @@ TagManager:
   - BallGame
   - Grappler
   - Waypoint
+  - Killer
   layers:
   - Default
   - TransparentFX

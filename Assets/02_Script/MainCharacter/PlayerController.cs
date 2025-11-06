@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
@@ -176,5 +177,20 @@ public class PlayerController : MonoBehaviour
     public bool IsTouchingFloor()
     {
         return touchingFloor;
+    }
+    private void OnTriggerEnter(Collider other)
+    {
+        // Verificar si el objeto con el que colisionamos tiene el tag "Killer"
+        if (other.CompareTag("Killer"))
+        {
+            // Llamar al método que reinicia la escena
+            RestartScene();
+        }
+    }
+    private void RestartScene()
+    {
+        // Obtener el nombre de la escena actual y recargarla
+        string sceneName = SceneManager.GetActiveScene().name;
+        SceneManager.LoadScene(sceneName);
     }
 }
