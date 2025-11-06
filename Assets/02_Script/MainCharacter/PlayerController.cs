@@ -9,6 +9,10 @@ public class PlayerController : MonoBehaviour
     public float rotationSpeed = 10f;
     public float jumpHeight = 2f;
     public int maxJumps = 2;
+    
+    [Header("Super Salto")]
+    [Tooltip("Multiplicador de salto cuando está sobre Grappler")]
+    public float grapplerJumpMultiplier = 3.0f;
 
     [Header("Referencias")]
     public Transform model;
@@ -22,10 +26,15 @@ public class PlayerController : MonoBehaviour
     private int jumpCount;
 
     private bool touchingFloor = false; // ✅ Detecta si está tocando el tag "Floor"
+    private bool touchingGrappler = false; // ✅ Detecta si está tocando el tag "Grappler"
+    private float originalJumpHeight; // ✅ Guarda el valor original del salto
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        
+        // Guardar el valor original del salto
+        originalJumpHeight = jumpHeight;
 
         if (animator == null && model != null)
             animator = model.GetComponent<Animator>();
@@ -35,6 +44,8 @@ public class PlayerController : MonoBehaviour
 
         if (stepParticles != null)
             stepParticles.Stop();
+            
+        Debug.Log($"✅ PlayerController inicializado. Salto original: {originalJumpHeight}");
     }
 
     void Update()
@@ -47,8 +58,8 @@ public class PlayerController : MonoBehaviour
             isJumping = false;
             animator.SetBool("IsJumping", false);
 
-            // ✅ Solo reinicia el contador si toca algo con tag "Floor"
-            if (touchingFloor)
+            // ✅ Solo reinicia el contador si toca algo con tag "Floor" o "Grappler"
+            if (touchingFloor || touchingGrappler)
                 jumpCount = 0;
         }
 
@@ -91,7 +102,21 @@ public class PlayerController : MonoBehaviour
         // Saltar / doble salto
         if (Input.GetButtonDown("Jump") && jumpCount < maxJumps)
         {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            // Calcular la altura del salto según la superficie
+            float currentJumpHeight = jumpHeight;
+            
+            if (touchingGrappler)
+            {
+                currentJumpHeight = originalJumpHeight * grapplerJumpMultiplier;
+                Debug.Log($"🚀 SUPER SALTO! Altura: {currentJumpHeight} (Multiplicador: {grapplerJumpMultiplier}x)");
+            }
+            else
+            {
+                currentJumpHeight = originalJumpHeight;
+                Debug.Log($"🦘 Salto normal. Altura: {currentJumpHeight}");
+            }
+            
+            velocity.y = Mathf.Sqrt(currentJumpHeight * -2f * gravity);
             isJumping = true;
             jumpCount++;
 
@@ -110,10 +135,19 @@ public class PlayerController : MonoBehaviour
         if (hit.collider.CompareTag("Floor"))
         {
             touchingFloor = true;
+            touchingGrappler = false;
+            Debug.Log("🏠 Tocando Floor");
+        }
+        else if (hit.collider.CompareTag("Grappler"))
+        {
+            touchingGrappler = true;
+            touchingFloor = false;
+            Debug.Log("🚀 Tocando Grappler - ¡Listo para super salto!");
         }
         else
         {
             touchingFloor = false;
+            touchingGrappler = false;
         }
     }
 
@@ -124,5 +158,23 @@ public class PlayerController : MonoBehaviour
         {
             stepParticles.Play();
         }
+    }
+    
+    // Método público para cambiar el multiplicador de salto del Grappler
+    public void SetGrapplerJumpMultiplier(float multiplier)
+    {
+        grapplerJumpMultiplier = multiplier;
+        Debug.Log($"🔧 Multiplicador de salto del Grappler cambiado a: {multiplier}x");
+    }
+    
+    // Método público para obtener el estado de las superficies
+    public bool IsTouchingGrappler()
+    {
+        return touchingGrappler;
+    }
+    
+    public bool IsTouchingFloor()
+    {
+        return touchingFloor;
     }
 }
