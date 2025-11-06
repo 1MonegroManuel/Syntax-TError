@@ -6,7 +6,10 @@ TagManager:
   tags:
   - Floor
   - camera
-  - Enemy
+  - BallGame
+  - Grappler
+  - Waypoint
+  - Killer
   layers:
   - Default
   - TransparentFX

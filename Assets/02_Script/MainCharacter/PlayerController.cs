@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
@@ -9,6 +10,10 @@ public class PlayerController : MonoBehaviour
     public float rotationSpeed = 10f;
     public float jumpHeight = 2f;
     public int maxJumps = 2;
+    
+    [Header("Super Salto")]
+    [Tooltip("Multiplicador de salto cuando está sobre Grappler")]
+    public float grapplerJumpMultiplier = 3.0f;
 
     [Header("Ataques del jugador")]
     public float attackCooldown = 0.7f; // Tiempo entre golpes
@@ -34,10 +39,16 @@ public class PlayerController : MonoBehaviour
     private int attackCount = 0;
     private float lastAttackTime = 0f;
     private bool isInCombo = false;
+    private bool touchingFloor = false; // ✅ Detecta si está tocando el tag "Floor"
+    private bool touchingGrappler = false; // ✅ Detecta si está tocando el tag "Grappler"
+    private float originalJumpHeight; // ✅ Guarda el valor original del salto
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        
+        // Guardar el valor original del salto
+        originalJumpHeight = jumpHeight;
 
         if (animator == null && model != null)
             animator = model.GetComponent<Animator>();
@@ -47,6 +58,8 @@ public class PlayerController : MonoBehaviour
 
         if (stepParticles != null)
             stepParticles.Stop();
+            
+        Debug.Log($"✅ PlayerController inicializado. Salto original: {originalJumpHeight}");
     }
 
     void Update()
@@ -66,7 +79,8 @@ public class PlayerController : MonoBehaviour
             isJumping = false;
             animator.SetBool("IsJumping", false);
 
-            if (touchingFloor)
+            // ✅ Solo reinicia el contador si toca algo con tag "Floor" o "Grappler"
+            if (touchingFloor || touchingGrappler)
                 jumpCount = 0;
         }
 
@@ -108,7 +122,21 @@ public class PlayerController : MonoBehaviour
     {
         if (Input.GetButtonDown("Jump") && jumpCount < maxJumps)
         {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            // Calcular la altura del salto según la superficie
+            float currentJumpHeight = jumpHeight;
+            
+            if (touchingGrappler)
+            {
+                currentJumpHeight = originalJumpHeight * grapplerJumpMultiplier;
+                Debug.Log($"🚀 SUPER SALTO! Altura: {currentJumpHeight} (Multiplicador: {grapplerJumpMultiplier}x)");
+            }
+            else
+            {
+                currentJumpHeight = originalJumpHeight;
+                Debug.Log($"🦘 Salto normal. Altura: {currentJumpHeight}");
+            }
+            
+            velocity.y = Mathf.Sqrt(currentJumpHeight * -2f * gravity);
             isJumping = true;
             jumpCount++;
 
@@ -124,53 +152,15 @@ public class PlayerController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.P))
         {
-            // 🔄 Girar hacia el enemigo más cercano
-            Transform enemigo = BuscarEnemigoCercano(8f);
-            if (enemigo != null)
-            {
-                Vector3 dir = (enemigo.position - transform.position);
-                dir.y = 0;
-                if (dir != Vector3.zero)
-                {
-                    Quaternion targetRot = Quaternion.LookRotation(dir);
-                    model.rotation = Quaternion.Slerp(model.rotation, targetRot, 1f);
-                }
-            }
-
-            // Detiene movimiento
-            animator.SetBool("IsRunning", false);
-            isJumping = false;
-            velocity = Vector3.zero;
-
-            canAttack = false;
-            lastAttackTime = Time.time;
-            attackCount++;
-
-            // Combo final
-            if (attackCount >= comboThreshold)
-            {
-                animator.SetTrigger("Combo");
-                attackCount = 0;
-                isInCombo = true;
-                Invoke(nameof(EndCombo), 1.3f);
-            }
-            else
-            {
-                if (lastAttackRight)
-                {
-                    animator.SetTrigger("AttackLeft");
-                    lastAttackRight = false;
-                }
-                else
-                {
-                    animator.SetTrigger("AttackRight");
-                    lastAttackRight = true;
-                }
-
-                Invoke(nameof(EnableAttack), attackCooldown);
-            }
-
-            Invoke(nameof(ResetCombo), 1.4f);
+            touchingFloor = true;
+            touchingGrappler = false;
+            Debug.Log("🏠 Tocando Floor");
+        }
+        else if (hit.collider.CompareTag("Grappler"))
+        {
+            touchingGrappler = true;
+            touchingFloor = false;
+            Debug.Log("🚀 Tocando Grappler - ¡Listo para super salto!");
         }
     }
 
@@ -182,12 +172,8 @@ public class PlayerController : MonoBehaviour
 
         foreach (var col in enemigos)
         {
-            if (col.CompareTag("Enemy"))
-            {
-                var enemigo = col.GetComponent<EnemyController>();
-                if (enemigo != null)
-                    enemigo.RecibirDaño(attackDamage);
-            }
+            touchingFloor = false;
+            touchingGrappler = false;
         }
 
         Debug.Log("💥 Golpe ejecutado, enemigos dentro del rango: " + enemigos.Length);
@@ -211,30 +197,37 @@ public class PlayerController : MonoBehaviour
             stepParticles.Play();
         }
     }
-
-    // ------------------- DETECCIÓN DE ENEMIGOS -------------------
-    Transform BuscarEnemigoCercano(float radio = 10f)
+    
+    // Método público para cambiar el multiplicador de salto del Grappler
+    public void SetGrapplerJumpMultiplier(float multiplier)
     {
-        GameObject[] enemigos = GameObject.FindGameObjectsWithTag("Enemy");
-        Transform masCercano = null;
-        float distanciaMin = Mathf.Infinity;
-
-        foreach (var e in enemigos)
-        {
-            float d = Vector3.Distance(transform.position, e.transform.position);
-            if (d < distanciaMin && d <= radio)
-            {
-                distanciaMin = d;
-                masCercano = e.transform;
-            }
-        }
-        return masCercano;
+        grapplerJumpMultiplier = multiplier;
+        Debug.Log($"🔧 Multiplicador de salto del Grappler cambiado a: {multiplier}x");
     }
-
-    // ------------------- DEBUG -------------------
-    private void OnDrawGizmosSelected()
+    
+    // Método público para obtener el estado de las superficies
+    public bool IsTouchingGrappler()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position + transform.forward * 1f, attackRange);
+        return touchingGrappler;
+    }
+    
+    public bool IsTouchingFloor()
+    {
+        return touchingFloor;
+    }
+    private void OnTriggerEnter(Collider other)
+    {
+        // Verificar si el objeto con el que colisionamos tiene el tag "Killer"
+        if (other.CompareTag("Killer"))
+        {
+            // Llamar al método que reinicia la escena
+            RestartScene();
+        }
+    }
+    private void RestartScene()
+    {
+        // Obtener el nombre de la escena actual y recargarla
+        string sceneName = SceneManager.GetActiveScene().name;
+        SceneManager.LoadScene(sceneName);
     }
 }
