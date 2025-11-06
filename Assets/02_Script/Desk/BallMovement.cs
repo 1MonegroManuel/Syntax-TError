@@ -1,280 +1,244 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI; // Necesario para manejar la UI (fade)
+using System.Collections; // Necesario para usar IEnumerator y Coroutines
 
 public class BallMovement : MonoBehaviour
 {
+    // --- Configuración Original ---
     [Header("Configuración de Movimiento")]
-    [Tooltip("Velocidad de movimiento en el eje Z")]
-    public float moveSpeed = 5f;
-    
-    [Tooltip("Distancia máxima que se moverá la pelota")]
-    public float maxDistance = 10000f;
-    
-    [Tooltip("Dirección del movimiento (1 = hacia adelante, -1 = hacia atrás)")]
-    public int direction = 1;
-    
+    [Tooltip("Velocidad máxima de movimiento (ahora será la velocidad alcanzada después de la aceleración)")]
+    public float maxSpeed = 5f;
+
+    [Tooltip("Aceleración de la pelota")]
+    public float acceleration = 2f;
+
     [Header("Configuración de Timing")]
-    [Tooltip("Tiempo de espera después del video antes de mover la pelota (en segundos)")]
     public float delayAfterVideo = 4.0f;
-    
+
     [Header("Configuración de Animación")]
-    [Tooltip("Si debe usar animación suave (Lerp) o movimiento directo")]
     public bool useSmoothMovement = true;
-    
-    [Tooltip("Velocidad de la animación suave")]
     public float smoothSpeed = 2f;
-    
+
     [Header("Referencias")]
-    [Tooltip("Referencia al VideoTrigger para detectar cuando termina el video")]
     public VideoTrigger videoTrigger;
-    
+
     [Header("Configuración de Física")]
-    [Tooltip("Si debe desactivar el Rigidbody hasta que termine el video")]
     public bool disableRigidbodyUntilVideo = true;
-    
+
+    // --- NUEVA CONFIGURACIÓN DE RUTA ---
+    [Header("Configuración de Ruta Fija (Waypoints)")]
+    [Tooltip("Lista de Transforms que definen la ruta. ¡Asígnalos en el Inspector!")]
+    public Transform[] waypoints;
+
+    [Tooltip("Distancia de cercanía para considerar que ha llegado al waypoint")]
+    public float arrivalThreshold = 0.2f;
+
+    // --- Variables Privadas ---
     private Vector3 startPosition;
-    private Vector3 targetPosition;
+    private int currentWaypointIndex = 0; // Índice del waypoint actual
     private bool shouldMove = false;
-    private bool hasMoved = false;
+    private bool hasReachedEnd = false;
     private bool videoFinished = false;
     private float delayTimer = 0f;
-    private bool isWaitingForVideo = true; // ✅ Control para esperar el video
-    private Rigidbody ballRigidbody; // ✅ Referencia al Rigidbody
-    
+    private bool isWaitingForVideo = true;
+    private Rigidbody ballRigidbody;
+
+    // Para manejar la aceleración
+    private float currentSpeed = 0f;
+
+    // Referencia al Image para el fade
+    public Image fadeImage;
+
+    // ********** MÉTODOS PRINCIPALES **********
+
     void Start()
     {
-        // Guardar la posición inicial
-        startPosition = transform.position;
-        
-        // Calcular la posición objetivo
-        targetPosition = startPosition + Vector3.forward * maxDistance * direction;
-        
-        // Obtener referencia al Rigidbody
-        ballRigidbody = GetComponent<Rigidbody>();
-        if (ballRigidbody == null)
+        // Inicialización de posiciones y referencias
+        if (waypoints != null && waypoints.Length > 0)
         {
-            Debug.LogWarning("⚠️ No se encontró Rigidbody en la pelota. Agrega un Rigidbody para mejor control físico.");
+            startPosition = waypoints[0].position;
+            transform.position = startPosition;
         }
-        
-        // Desactivar Rigidbody si está configurado
+        else
+        {
+            startPosition = transform.position;
+            Debug.LogWarning("⚠️ No hay Waypoints asignados. La pelota se quedará inmóvil.");
+        }
+
+        ballRigidbody = GetComponent<Rigidbody>();
         if (disableRigidbodyUntilVideo && ballRigidbody != null)
         {
             ballRigidbody.isKinematic = true;
-            Debug.Log("🔒 Rigidbody desactivado - Pelota completamente inmóvil hasta que termine el video");
         }
-        
-        // Buscar automáticamente el VideoTrigger si no está asignado
+
         if (videoTrigger == null)
         {
             videoTrigger = FindObjectOfType<VideoTrigger>();
-            if (videoTrigger != null)
-            {
-                Debug.Log("✅ VideoTrigger encontrado automáticamente para BallMovement");
-            }
-            else
-            {
-                Debug.LogWarning("⚠️ No se encontró VideoTrigger. Asigna manualmente la referencia.");
-            }
         }
-        
-        // Suscribirse al evento de fin de video
         VideoTrigger.OnVideoCompleted += OnVideoFinished;
-        
-        Debug.Log($"🏀 BallMovement inicializado. Posición inicial: {startPosition}, Objetivo: {targetPosition}");
-        Debug.Log("🏀 Pelota en modo de espera - NO se moverá hasta que termine la cinemática");
     }
-    
+
     void Update()
     {
-        // ✅ Solo procesar si NO está esperando el video
-        if (!isWaitingForVideo)
+        if (hasReachedEnd || isWaitingForVideo) return;
+
+        // Manejar el delay después del video
+        if (videoFinished && !shouldMove)
         {
-            // Manejar el delay después del video
-            if (videoFinished && !shouldMove)
+            delayTimer += Time.deltaTime;
+            if (delayTimer >= delayAfterVideo)
             {
-                delayTimer += Time.deltaTime;
-                if (delayTimer >= delayAfterVideo)
-                {
-                    shouldMove = true;
-                    Debug.Log($"🏀 Delay completado ({delayAfterVideo}s) - Iniciando movimiento de la pelota");
-                }
-            }
-            
-            // Mover la pelota cuando esté listo
-            if (shouldMove && !hasMoved)
-            {
-                MoveBall();
+                shouldMove = true;
+                Debug.Log($"🏀 Delay completado - Iniciando movimiento de la pelota");
             }
         }
+
+        // Llamar al nuevo método que gestiona el recorrido de la ruta
+        if (shouldMove)
+        {
+            MoveAlongWaypoints();
+        }
     }
-    
-    void MoveBall()
+
+    // ********** NUEVO MÉTODO PARA RECORRER LOS WAYPOINTS **********
+
+    public void MoveAlongWaypoints()
     {
-        if (useSmoothMovement)
+        if (waypoints == null || waypoints.Length == 0) return;
+
+        if (currentWaypointIndex >= waypoints.Length)
         {
-            // Movimiento suave usando Lerp
-            transform.position = Vector3.Lerp(transform.position, targetPosition, smoothSpeed * Time.deltaTime);
-            
-            // Verificar si ha llegado cerca del objetivo
-            if (Vector3.Distance(transform.position, targetPosition) < 0.1f)
+            if (!hasReachedEnd)
             {
-                transform.position = targetPosition;
-                hasMoved = true;
-                Debug.Log("🏀 Pelota llegó al destino (movimiento suave)");
+                hasReachedEnd = true;
+                shouldMove = false;
+                Debug.Log("🏁 Pelota llegó al destino final de la ruta.");
             }
+            return;
         }
-        else
+
+        Vector3 targetPosition = waypoints[currentWaypointIndex].position;
+
+        // Aceleración: aumentamos la velocidad hasta la velocidad máxima
+        AccelerateTowards(targetPosition);
+    }
+
+    // ********** NUEVO MÉTODO DE MOVIMIENTO CON ACELERACIÓN **********
+
+    void AccelerateTowards(Vector3 targetPosition)
+    {
+        float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
+
+        // Aceleramos hacia el target (sin exceder la velocidad máxima)
+        if (currentSpeed < maxSpeed)
         {
-            // Movimiento directo
-            Vector3 movement = Vector3.forward * moveSpeed * direction * Time.deltaTime;
-            transform.position += movement;
-            
-            // Verificar si ha llegado al objetivo
-            float distanceTraveled = Vector3.Distance(startPosition, transform.position);
-            if (distanceTraveled >= maxDistance)
+            currentSpeed += acceleration * Time.deltaTime; // Aceleramos por el valor de "aceleración"
+        }
+
+        // Limitamos la velocidad máxima
+        currentSpeed = Mathf.Min(currentSpeed, maxSpeed);
+
+        // Mover la pelota usando la velocidad calculada
+        float step = currentSpeed * Time.deltaTime;
+
+        transform.position = Vector3.MoveTowards(transform.position, targetPosition, step);
+
+        // Si estamos lo suficientemente cerca del waypoint, pasamos al siguiente
+        if (distanceToTarget <= arrivalThreshold)
+        {
+            currentWaypointIndex++;
+            Debug.Log($"✅ Waypoint {currentWaypointIndex} alcanzado. Pasando al siguiente...");
+            currentSpeed = 0f; // Reiniciamos la velocidad al alcanzar el waypoint
+        }
+    }
+
+    // ********** DETECCIÓN DEL TRIGGER EN LOS WAYPOINTS **********
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Waypoint"))
+        {
+            if (other.transform == waypoints[currentWaypointIndex])
             {
-                transform.position = targetPosition;
-                hasMoved = true;
-                Debug.Log("🏀 Pelota llegó al destino (movimiento directo)");
+                currentWaypointIndex++;
+                Debug.Log($"✅ Waypoint {currentWaypointIndex} alcanzado. Pasando al siguiente...");
             }
         }
     }
-    
-    // Método que se ejecuta cuando termina el video
+
+    // ********** COLISIÓN CON EL JUGADOR (Muerte y Reinicio de la Escena) **********
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            // Llamar al método para manejar la muerte del jugador y el reinicio de la escena
+            StartCoroutine(HandlePlayerDeath());
+        }
+    }
+
+    // ********** MANEJO DE LA MUERTE DEL JUGADOR Y REINICIO DE LA ESCENA **********
+
+    IEnumerator HandlePlayerDeath()
+    {
+        // Activamos el efecto de fade out (se vuelve opaco)
+        yield return FadeScreen(1f);
+
+        // Reiniciamos la escena
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    // ********** EFECTO DE FADE (Desaparece o Aparece la Pantalla) **********
+
+    IEnumerator FadeScreen(float targetAlpha)
+    {
+        float currentAlpha = fadeImage.color.a;
+        float elapsedTime = 0f;
+        float duration = 1f; // Duración del fade (en segundos)
+
+        Color startColor = fadeImage.color;
+        Color targetColor = new Color(startColor.r, startColor.g, startColor.b, targetAlpha);
+
+        while (elapsedTime < duration)
+        {
+            fadeImage.color = Color.Lerp(startColor, targetColor, elapsedTime / duration);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        fadeImage.color = targetColor;
+    }
+
     void OnVideoFinished()
     {
-        isWaitingForVideo = false; // ✅ Ya no está esperando el video
-        
-        // Reactivar Rigidbody si estaba desactivado
+        isWaitingForVideo = false;
         if (disableRigidbodyUntilVideo && ballRigidbody != null)
         {
             ballRigidbody.isKinematic = false;
-            Debug.Log("🔓 Rigidbody reactivado - Pelota lista para movimiento físico");
         }
-        
         videoFinished = true;
         delayTimer = 0f;
-        Debug.Log($"🏀 ¡CINEMÁTICA TERMINADA! Iniciando delay de {delayAfterVideo} segundos antes del movimiento");
     }
-    
-    // Método público para iniciar el movimiento manualmente
-    public void StartMovement()
-    {
-        Debug.Log("🏀 Iniciando movimiento de la pelota manualmente");
-        isWaitingForVideo = false; // ✅ Salir del modo de espera
-        
-        // Reactivar Rigidbody si estaba desactivado
-        if (disableRigidbodyUntilVideo && ballRigidbody != null)
-        {
-            ballRigidbody.isKinematic = false;
-            Debug.Log("🔓 Rigidbody reactivado manualmente");
-        }
-        
-        shouldMove = true;
-        hasMoved = false;
-        videoFinished = true; // Marcar como si el video hubiera terminado
-    }
-    
-    // Método público para detener el movimiento
-    public void StopMovement()
-    {
-        Debug.Log("🏀 Deteniendo movimiento de la pelota");
-        shouldMove = false;
-    }
-    
-    // Método público para resetear la posición
+
+    // Reset de la pelota
     public void ResetPosition()
     {
-        Debug.Log("🏀 Reseteando posición de la pelota");
-        transform.position = startPosition;
+        currentWaypointIndex = 0;
+        hasReachedEnd = false;
         shouldMove = false;
-        hasMoved = false;
-    }
-    
-    // Método público para cambiar la dirección
-    public void ChangeDirection(int newDirection)
-    {
-        direction = newDirection;
-        targetPosition = startPosition + Vector3.forward * maxDistance * direction;
-        Debug.Log($"🏀 Dirección cambiada a: {direction}");
-    }
-    
-    // Método público para cambiar el delay después del video
-    public void SetDelayAfterVideo(float newDelay)
-    {
-        delayAfterVideo = newDelay;
-        Debug.Log($"🏀 Delay después del video cambiado a: {delayAfterVideo} segundos");
-    }
-    
-    // Método público para verificar el estado de la pelota
-    public bool IsWaitingForVideo()
-    {
-        return isWaitingForVideo;
-    }
-    
-    public bool HasVideoFinished()
-    {
-        return videoFinished;
-    }
-    
-    public bool IsMoving()
-    {
-        return shouldMove && !hasMoved;
-    }
-    
-    // Métodos para controlar el Rigidbody
-    public void EnableRigidbody()
-    {
-        if (ballRigidbody != null)
+        videoFinished = false;
+        isWaitingForVideo = true;
+
+        if (waypoints != null && waypoints.Length > 0)
         {
-            ballRigidbody.isKinematic = false;
-            Debug.Log("🔓 Rigidbody activado manualmente");
+            transform.position = startPosition;
         }
     }
-    
-    public void DisableRigidbody()
-    {
-        if (ballRigidbody != null)
-        {
-            ballRigidbody.isKinematic = true;
-            Debug.Log("🔒 Rigidbody desactivado manualmente");
-        }
-    }
-    
-    public bool IsRigidbodyEnabled()
-    {
-        return ballRigidbody != null && !ballRigidbody.isKinematic;
-    }
-    
+
+    // Desuscribirse del evento al destruir el objeto
     void OnDestroy()
     {
-        // Limpiar eventos
         VideoTrigger.OnVideoCompleted -= OnVideoFinished;
-    }
-    
-    // Método para debug - mostrar información en el Inspector
-    void OnDrawGizmosSelected()
-    {
-        if (Application.isPlaying)
-        {
-            // Dibujar línea desde la posición inicial hasta el objetivo
-            Gizmos.color = Color.green;
-            Gizmos.DrawLine(startPosition, targetPosition);
-            
-            // Dibujar esfera en la posición objetivo
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(targetPosition, 0.5f);
-        }
-        else
-        {
-            // En modo editor, mostrar la trayectoria prevista
-            Vector3 startPos = transform.position;
-            Vector3 endPos = startPos + Vector3.forward * maxDistance * direction;
-            
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawLine(startPos, endPos);
-            
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(endPos, 0.5f);
-        }
     }
 }
